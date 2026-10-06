@@ -21,7 +21,7 @@
             </div>
 
             <div class="video-container">
-                <video id="video" autoplay></video>
+                <video id="video" autoplay playsinline></video>
                 <canvas id="overlay-canvas"></canvas>
                 <div id="countdown-display"></div>
                 <div id="flash"></div>
@@ -61,10 +61,12 @@
                 </div>
 
                 <!-- Capture Button -->
-                <button id="capture-btn" class="capture-button">
-                    <span class="btn-icon"><i class="fas fa-camera"></i></span>
-                    <span class="btn-text">Ambil Foto</span>
-                </button>
+                <div class="capture-container">
+                    <button id="capture-btn" class="capture-button-round">
+                        <div class="capture-inner"></div>
+                    </button>
+                    <div class="capture-text">Ambil Foto</div>
+                </div>
             </div>
         </div>
 
@@ -152,10 +154,21 @@
                             <button class="deco-btn" data-deco="spider">🕷️ 🕸 ✮</button>
                         </div>
                     </div>
+
+                    <!-- Sticker Integration -->
+                    <div class="custom-group">
+                        <label><i class="fas fa-sticky-note"></i> Tambah Sticker Custom (Bebas Susun)</label>
+                        <div class="sticker-list-horizontal" id="sticker-list">
+                            <!-- Stickers will be appended here via JS -->
+                        </div>
+                    </div>
                 </div>
 
                 <div class="preview-main">
-                    <canvas id="preview-canvas"></canvas>
+                    <div id="canvas-wrapper">
+                        <canvas id="preview-canvas"></canvas>
+                        <div id="sticker-layer"></div>
+                    </div>
                 </div>
                 <div class="preview-thumbnails" id="photo-grid"></div>
                 <div class="preview-actions">

@@ -12,6 +12,12 @@ var btnSave = document.getElementById("btn-save");
 var rightSide = document.getElementById("right-side");
 var container = document.querySelector(".container");
 
+// New variables for stickers
+var stickerLayer = document.getElementById("sticker-layer");
+var stickerList = document.getElementById("sticker-list");
+var canvasWrapper = document.getElementById("canvas-wrapper");
+var activeSticker = null;
+
 // Settings
 var selectedFrames = 4;
 var selectedFilter = "none";
@@ -219,6 +225,8 @@ function showPreview() {
     rightSide.classList.add("active");
     container.classList.add("has-preview");
     
+    initStickerPicker();
+    
     // Template Selection - Reset event listeners
     document.querySelectorAll('.template-btn').forEach(btn => {
         const newBtn = btn.cloneNode(true);
@@ -399,6 +407,10 @@ function createStoryGrid(photos) {
     
     // Draw footer
     drawTemplateFooter(ctx);
+
+    if(canvasWrapper) {
+        canvasWrapper.style.aspectRatio = `${canvasWidth} / ${canvasHeight}`;
+    }
 }
 
 // Draw Template Footer
@@ -566,6 +578,8 @@ btnRetake.addEventListener("click", () => {
 
 // Save Photo
 btnSave.addEventListener("click", () => {
+    drawStickersToCanvas();
+
     let dataURL = previewCanvas.toDataURL("image/png");
     
     // Download to device
@@ -582,8 +596,231 @@ btnSave.addEventListener("click", () => {
         rightSide.classList.remove("active");
         container.classList.remove("has-preview");
         capturedPhotos = [];
+        if(stickerLayer) stickerLayer.innerHTML = '';
     }, 500);
 });
+
+// ================= STICKER LOGIC =================
+const customStickers = [
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__10_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__11_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__1_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__2_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__3_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__4_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__5_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__6_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__7_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__8_-removebg-preview.png",
+    "Pelekat_Maklum_Balas_Digital_Haiwan_Gajah_Merah_Jambu_dan_Biru__9_-removebg-preview.png"
+];
+
+function initStickerPicker() {
+    if(!stickerList) return;
+    stickerList.innerHTML = '';
+    customStickers.forEach(filename => {
+        let img = document.createElement('img');
+        img.src = 'Sticker/' + filename;
+        img.className = 'sticker-picker-item';
+        img.addEventListener('click', () => addStickerToCanvas(img.src));
+        stickerList.appendChild(img);
+    });
+}
+
+function addStickerToCanvas(src) {
+    let sticker = document.createElement('div');
+    sticker.className = 'draggable-sticker active';
+    sticker.style.left = '50%';
+    sticker.style.top = '50%';
+    
+    // Use dataset for easy access to transform values
+    sticker.dataset.x = 0;
+    sticker.dataset.y = 0;
+    sticker.dataset.scale = 1;
+    sticker.dataset.rotation = 0;
+    
+    updateStickerTransform(sticker);
+
+    let img = document.createElement('img');
+    img.src = src;
+    
+    let delBtn = document.createElement('div');
+    delBtn.className = 'sticker-control sticker-delete';
+    delBtn.innerHTML = '<i class="fas fa-times"></i>';
+    delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sticker.remove();
+    });
+    
+    let resizeBtn = document.createElement('div');
+    resizeBtn.className = 'sticker-control sticker-resize';
+    resizeBtn.innerHTML = '<i class="fas fa-expand-alt"></i>';
+    
+    sticker.appendChild(img);
+    sticker.appendChild(delBtn);
+    sticker.appendChild(resizeBtn);
+    
+    if (activeSticker) activeSticker.classList.remove('active');
+    activeSticker = sticker;
+    stickerLayer.appendChild(sticker);
+    
+    img.onload = () => {
+        let maxW = 100; // max initial width
+        let ratio = img.naturalWidth / img.naturalHeight;
+        sticker.style.width = maxW + 'px';
+        sticker.style.height = (maxW / ratio) + 'px';
+        sticker.style.marginLeft = -(maxW / 2) + 'px';
+        sticker.style.marginTop = -(maxW / ratio / 2) + 'px';
+    };
+
+    setupStickerEvents(sticker, resizeBtn);
+}
+
+function updateStickerTransform(sticker) {
+    let x = parseFloat(sticker.dataset.x) || 0;
+    let y = parseFloat(sticker.dataset.y) || 0;
+    let scale = parseFloat(sticker.dataset.scale) || 1;
+    let rotation = parseFloat(sticker.dataset.rotation) || 0;
+    
+    sticker.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${rotation}deg)`;
+}
+
+function setupStickerEvents(sticker, resizeBtn) {
+    let isDragging = false;
+    let isResizing = false;
+    let startX, startY;
+    let startScale, startRotation;
+    let centerX, centerY;
+    
+    // Activation
+    sticker.addEventListener('mousedown', activate);
+    sticker.addEventListener('touchstart', activate, {passive: false});
+    
+    function activate(e) {
+        if (e.target.closest('.sticker-delete')) return;
+        
+        if (activeSticker) activeSticker.classList.remove('active');
+        sticker.classList.add('active');
+        activeSticker = sticker;
+        
+        if (e.target.closest('.sticker-resize')) {
+            isResizing = true;
+            let rect = sticker.getBoundingClientRect();
+            centerX = rect.left + rect.width / 2;
+            centerY = rect.top + rect.height / 2;
+        } else {
+            isDragging = true;
+        }
+        
+        startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+        startY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+        
+        startScale = parseFloat(sticker.dataset.scale);
+        startRotation = parseFloat(sticker.dataset.rotation);
+        
+        e.preventDefault();
+    }
+    
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, {passive: false});
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchend', onEnd);
+    
+    function onMove(e) {
+        if (!isDragging && !isResizing) return;
+        e.preventDefault();
+        
+        let clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+        let clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+        
+        if (isDragging) {
+            let dx = clientX - startX;
+            let dy = clientY - startY;
+            sticker.dataset.x = parseFloat(sticker.dataset.x) + dx;
+            sticker.dataset.y = parseFloat(sticker.dataset.y) + dy;
+            updateStickerTransform(sticker);
+            
+            startX = clientX;
+            startY = clientY;
+        } else if (isResizing) {
+            // Distance from center to pointer gives scale
+            let distStart = Math.hypot(startX - centerX, startY - centerY);
+            let distCurrent = Math.hypot(clientX - centerX, clientY - centerY);
+            let newScale = startScale * (distCurrent / distStart);
+            
+            // Angle from center to pointer gives rotation
+            let angleStart = Math.atan2(startY - centerY, startX - centerX);
+            let angleCurrent = Math.atan2(clientY - centerY, clientX - centerX);
+            let angleDiff = (angleCurrent - angleStart) * (180 / Math.PI);
+            let newRotation = startRotation + angleDiff;
+            
+            sticker.dataset.scale = Math.max(0.2, newScale);
+            sticker.dataset.rotation = newRotation;
+            updateStickerTransform(sticker);
+        }
+    }
+    
+    function onEnd() {
+        isDragging = false;
+        isResizing = false;
+    }
+}
+
+// Deselect when clicking outside
+document.addEventListener('mousedown', (e) => {
+    if (activeSticker && !e.target.closest('.draggable-sticker') && !e.target.closest('.sticker-picker-item')) {
+        activeSticker.classList.remove('active');
+        activeSticker = null;
+    }
+});
+document.addEventListener('touchstart', (e) => {
+    if (activeSticker && !e.target.closest('.draggable-sticker') && !e.target.closest('.sticker-picker-item')) {
+        activeSticker.classList.remove('active');
+        activeSticker = null;
+    }
+}, {passive: true});
+
+function drawStickersToCanvas() {
+    if (!stickerLayer) return;
+    const ctx = previewCanvas.getContext("2d");
+    const stickers = stickerLayer.querySelectorAll('.draggable-sticker');
+    
+    let wrapperRect = canvasWrapper.getBoundingClientRect();
+    let scaleX = previewCanvas.width / wrapperRect.width;
+    let scaleY = previewCanvas.height / wrapperRect.height;
+    
+    if (activeSticker) activeSticker.classList.remove('active');
+    
+    stickers.forEach(sticker => {
+        let img = sticker.querySelector('img');
+        let xOff = parseFloat(sticker.dataset.x) || 0;
+        let yOff = parseFloat(sticker.dataset.y) || 0;
+        let sScale = parseFloat(sticker.dataset.scale) || 1;
+        let sRot = parseFloat(sticker.dataset.rotation) || 0;
+        
+        let centerXDOM = (wrapperRect.width / 2) + xOff;
+        let centerYDOM = (wrapperRect.height / 2) + yOff;
+        
+        let canvasX = centerXDOM * scaleX;
+        let canvasY = centerYDOM * scaleY;
+        
+        let baseW = parseFloat(sticker.style.width);
+        let baseH = parseFloat(sticker.style.height);
+        
+        let canvasBaseW = baseW * scaleX;
+        let canvasBaseH = baseH * scaleY;
+        
+        ctx.save();
+        ctx.translate(canvasX, canvasY);
+        ctx.rotate(sRot * Math.PI / 180);
+        ctx.scale(sScale, sScale);
+        
+        ctx.drawImage(img, -canvasBaseW/2, -canvasBaseH/2, canvasBaseW, canvasBaseH);
+        
+        ctx.restore();
+    });
+}
 
 // Prevent accidental page close
 window.addEventListener('beforeunload', (e) => {

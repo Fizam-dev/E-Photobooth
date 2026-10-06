@@ -217,42 +217,60 @@ video {
 }
 
 /* CAPTURE BUTTON */
-.capture-button {
-    background: rgba(255, 255, 255, 0.95);
-    color: var(--mahogany);
-    border: none;
-    padding: 18px 40px;
-    border-radius: 16px;
-    font-size: 1.3em;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-    transition: all 0.3s ease;
+.capture-container {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    font-family: 'Inter', sans-serif;
+    margin-top: 10px;
 }
 
-.capture-button:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+.capture-button-round {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    border: 4px solid var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.capture-inner {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
     background: var(--white);
+    transition: all 0.2s ease;
 }
 
-.capture-button:active:not(:disabled) {
-    transform: scale(0.98);
+.capture-button-round:hover .capture-inner {
+    transform: scale(0.9);
+    background: #f0f0f0;
 }
 
-.capture-button:disabled {
+.capture-button-round:active .capture-inner {
+    transform: scale(0.85);
+    background: #e0e0e0;
+}
+
+.capture-button-round:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-.btn-icon {
-    font-size: 1.2em;
+.capture-text {
+    color: var(--text-light);
+    font-size: 1.1em;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
 }
+
 
 /* COUNTDOWN */
 #countdown-display {
@@ -570,14 +588,128 @@ video {
     justify-content: center;
     align-items: center;
     overflow: auto;
+    position: relative;
 }
 
-#preview-canvas {
+#canvas-wrapper {
+    position: relative;
+    display: inline-block;
     max-width: 100%;
     max-height: 600px;
     height: auto;
+    /* Aspect ratio will be set by JS dynamically */
+}
+
+#preview-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
     border-radius: 16px;
     box-shadow: 0 10px 40px var(--shadow);
+}
+
+#sticker-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: 16px; /* Match canvas border radius */
+    z-index: 10;
+}
+
+/* Custom Sticker Integration */
+.sticker-list-horizontal {
+    display: flex;
+    gap: 15px;
+    overflow-x: auto;
+    padding: 10px 5px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.sticker-list-horizontal::-webkit-scrollbar {
+    height: 6px;
+}
+
+.sticker-list-horizontal::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+}
+
+.sticker-picker-item {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 5px;
+    transition: transform 0.2s ease, background 0.2s ease;
+    flex-shrink: 0;
+}
+
+.sticker-picker-item:hover {
+    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Draggable Stickers */
+.draggable-sticker {
+    position: absolute;
+    pointer-events: auto;
+    cursor: move;
+    transform-origin: center center;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none; /* Important for touch drag */
+}
+
+.draggable-sticker img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none; /* Let the wrapper handle events */
+}
+
+.draggable-sticker.active {
+    outline: 2px dashed #F2CA46;
+}
+
+/* Controls on active sticker */
+.sticker-control {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: #F2CA46;
+    color: var(--mahogany);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    cursor: pointer;
+    pointer-events: auto;
+    display: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.draggable-sticker.active .sticker-control {
+    display: flex;
+}
+
+.sticker-delete {
+    top: -12px;
+    right: -12px;
+}
+
+.sticker-resize {
+    bottom: -12px;
+    right: -12px;
+    cursor: nwse-resize;
 }
 
 .preview-thumbnails {

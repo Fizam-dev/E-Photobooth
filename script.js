@@ -12,6 +12,45 @@ var btnSave = document.getElementById("btn-save");
 var rightSide = document.getElementById("right-side");
 var container = document.querySelector(".container");
 
+var btnSaveVideo = document.getElementById("btn-save-video");
+var btnPauseAnim = document.getElementById("btn-pause-anim");
+
+
+// Audio Context for Ticking
+var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playTick() {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.1);
+}
+
+function playVoicePrompt() {
+    var msg = new SpeechSynthesisUtterance("Smile!");
+    msg.rate = 1.2;
+    window.speechSynthesis.speak(msg);
+}
+
+let animationFrameId = null;
+let currentAnimFrame = 0;
+let isAnimPaused = false;
+
+btnPauseAnim.addEventListener("click", () => {
+    isAnimPaused = !isAnimPaused;
+    if (isAnimPaused) {
+        btnPauseAnim.innerHTML = '<span><i class="fas fa-play"></i> Play</span>';
+    } else {
+        btnPauseAnim.innerHTML = '<span><i class="fas fa-pause"></i> Pause</span>';
+    }
+});
+
 // New variables for stickers
 var stickerLayer = document.getElementById("sticker-layer");
 var stickerList = document.getElementById("sticker-list");
@@ -82,6 +121,7 @@ function applyFilterToVideo() {
     video.classList.add(`filter-${selectedFilter}`);
 }
 
+
 // Shutter Sound
 function playShutter() {
     try {
@@ -96,8 +136,20 @@ function playShutter() {
 
 // Capture Button Click
 captureBtn.addEventListener("click", () => {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     let delay = parseInt(timerInput.value) || 3;
     startSequence(delay);
+});
+
+// Spacebar to Take Photo
+document.addEventListener('keydown', (e) => {
+    // Only trigger if focus is not in an input and we haven't started capturing yet
+    if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault(); // prevent page scrolling
+        if (!captureBtn.disabled && !container.classList.contains("has-preview")) {
+            captureBtn.click();
+        }
+    }
 });
 
 // Start Photo Sequence
@@ -109,8 +161,8 @@ function startSequence(delay) {
     function doShoot() {
         showCountdown(delay);
 
-        setTimeout(() => {
-            takePhoto();
+        setTimeout(async () => {
+            await takePhotoAsync();
             count++;
 
             if (count < selectedFrames) {
@@ -132,10 +184,21 @@ function startSequence(delay) {
 function showCountdown(sec) {
     let timer = sec;
     countdownDisplay.style.display = "block";
+    countdownDisplay.textContent = timer;
+    playTick();
     
     let countdown = setInterval(() => {
+        timer--;
         countdownDisplay.textContent = timer <= 0 ? "📸" : timer;
-        if (timer-- <= 0) {
+        
+        if (timer > 0) {
+            playTick();
+            if (timer === 1) {
+                playVoicePrompt();
+            }
+        }
+        
+        if (timer <= 0) {
             clearInterval(countdown);
             setTimeout(() => {
                 countdownDisplay.textContent = "";
@@ -144,26 +207,41 @@ function showCountdown(sec) {
     }, 1000);
 }
 
-// Take Photo
-function takePhoto() {
-    flashEffect();
-    playShutter();
+// Take Photo Asynchronously (Live Photo capture)
+function takePhotoAsync() {
+    return new Promise((resolve) => {
+        flashEffect();
+        playShutter();
 
-    var canvas = document.createElement("canvas");
-    var ctx = canvas.getContext("2d");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+        let frames = [];
+        let maxFrames = 10;
+        let captureCount = 0;
 
-    // Mirror the video
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, -canvas.width, 0);
+        let interval = setInterval(() => {
+            var canvas = document.createElement("canvas");
+            var ctx = canvas.getContext("2d");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
 
-    // Apply filter
-    if (selectedFilter !== "none") {
-        applyCanvasFilter(ctx, canvas);
-    }
+            // Mirror the video
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, -canvas.width, 0);
 
-    capturedPhotos.push(canvas);
+            // Apply filter
+            if (selectedFilter !== "none") {
+                applyCanvasFilter(ctx, canvas);
+            }
+
+            frames.push(canvas);
+            captureCount++;
+
+            if (captureCount >= maxFrames) {
+                clearInterval(interval);
+                capturedPhotos.push(frames);
+                resolve();
+            }
+        }, 100); // 100ms * 10 = 1000ms duration
+    });
 }
 
 // Apply Filter to Canvas
@@ -219,7 +297,7 @@ function flashEffect() {
 
 // Show Preview on Right Side
 function showPreview() {
-    createStoryGrid(capturedPhotos);
+    createStoryGrid(capturedPhotos, 0);
     
     // Show right side
     rightSide.classList.add("active");
@@ -235,11 +313,9 @@ function showPreview() {
     
     document.querySelectorAll('.template-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            console.log('Template clicked:', this.getAttribute('data-template'));
             document.querySelectorAll('.template-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             selectedTemplate = this.getAttribute('data-template');
-            createStoryGrid(capturedPhotos);
         });
     });
 
@@ -251,15 +327,13 @@ function showPreview() {
     
     document.querySelectorAll('.bg-color-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            console.log('Background clicked:', this.getAttribute('data-bg'));
             document.querySelectorAll('.bg-color-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             selectedBackground = this.getAttribute('data-bg');
-            createStoryGrid(capturedPhotos);
         });
     });
 
-    // Decoration Selection (includes characters now) - Reset event listeners
+    // Decoration Selection - Reset event listeners
     document.querySelectorAll('.deco-btn').forEach(btn => {
         const newBtn = btn.cloneNode(true);
         btn.parentNode.replaceChild(newBtn, btn);
@@ -267,17 +341,16 @@ function showPreview() {
     
     document.querySelectorAll('.deco-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            console.log('Decoration clicked:', this.getAttribute('data-deco'));
             document.querySelectorAll('.deco-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             selectedDecoration = this.getAttribute('data-deco');
-            createStoryGrid(capturedPhotos);
         });
     });
     
     // Create thumbnails
     photoGrid.innerHTML = "";
-    capturedPhotos.forEach((photo, index) => {
+    capturedPhotos.forEach((photoSequence, index) => {
+        let photo = Array.isArray(photoSequence) ? photoSequence[0] : photoSequence;
         let div = document.createElement("div");
         div.className = "photo-thumbnail";
         div.innerHTML = `
@@ -287,10 +360,27 @@ function showPreview() {
         div.addEventListener("click", () => retakeSinglePhoto(index));
         photoGrid.appendChild(div);
     });
+
+    // Start Live Photo Animation Loop
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+    animatePreview();
+}
+
+// Live Photo Animation Loop
+function animatePreview() {
+    if (rightSide.classList.contains("active")) {
+        if (!isAnimPaused) {
+            createStoryGrid(capturedPhotos, Math.floor(currentAnimFrame / 6));
+            currentAnimFrame++;
+        }
+        animationFrameId = requestAnimationFrame(animatePreview);
+    }
 }
 
 // Create Photo Strip with proper layout
-function createStoryGrid(photos) {
+function createStoryGrid(photos, frameIndex = 0) {
     const ctx = previewCanvas.getContext("2d");
     const photoCount = photos.length;
     
@@ -343,7 +433,8 @@ function createStoryGrid(photos) {
         for (let col = 0; col < layout.columns; col++) {
             if (photoIndex >= photos.length) break;
             
-            const photo = photos[photoIndex];
+            const photoSequence = photos[photoIndex];
+            const photo = Array.isArray(photoSequence) ? photoSequence[frameIndex % photoSequence.length] : photoSequence;
             const x = layout.sidePadding + (col * (layout.photoWidth + layout.horizontalSpacing));
             const y = layout.topPadding + (row * (layout.photoHeight + layout.verticalSpacing));
             
@@ -362,17 +453,28 @@ function createStoryGrid(photos) {
             }
             
             // Add frame/border effect based on template
-            if (selectedTemplate === 'polaroid' || selectedTemplate === 'doodle' || selectedTemplate === 'minimal') {
-                ctx.fillStyle = '#FFFFFF';
-                const borderWidth = 10;
-                ctx.fillRect(x - borderWidth, y - borderWidth, layout.photoWidth + borderWidth * 2, layout.photoHeight + borderWidth * 2);
+            let frameColor = '#FFFFFF';
+            let borderWidth = 10;
+            switch(selectedTemplate) {
+                case 'classic': frameColor = '#000000'; break;
+                case 'retro': frameColor = '#800020'; break;
+                case 'checkerboard': frameColor = '#1a1a2e'; break;
+                case 'rainbow': frameColor = '#0f3460'; break;
+                case 'hearts': frameColor = '#6B1515'; break;
+                case 'stars': frameColor = '#191970'; break;
+                case 'flowers': frameColor = '#4A5568'; break;
+                case 'polaroid': frameColor = '#FFFFFF'; borderWidth = 15; break;
+                case 'doodle': frameColor = '#FFFFFF'; break;
+                case 'minimal': frameColor = '#FFFFFF'; borderWidth = 4; break;
             }
+            
+            ctx.fillStyle = frameColor;
+            ctx.fillRect(x - borderWidth, y - borderWidth, layout.photoWidth + borderWidth * 2, layout.photoHeight + borderWidth * 2);
             
             if (selectedTemplate === 'doodle') {
                 ctx.strokeStyle = '#333';
                 ctx.lineWidth = 2;
                 ctx.setLineDash([12, 8]);
-                const borderWidth = 10;
                 ctx.strokeRect(x - borderWidth, y - borderWidth, layout.photoWidth + borderWidth * 2, layout.photoHeight + borderWidth * 2);
                 ctx.setLineDash([]);
             }
@@ -419,9 +521,7 @@ function drawTemplateFooter(ctx) {
     const isLight = selectedBackground === 'white';
     const textColor = isLight ? '#333333' : '#FFFFFF';
     
-    // Position footer closer to bottom with proper spacing from photos
     const footerY = previewCanvas.height - 30; // 30px from bottom
-    
     ctx.fillStyle = textColor;
     ctx.font = '500 20px "Inter", sans-serif';
     ctx.textAlign = 'center';
@@ -553,8 +653,8 @@ function retakeSinglePhoto(index) {
         let delay = parseInt(timerInput.value) || 3;
         showCountdown(delay);
         
-        setTimeout(() => {
-            takePhoto();
+        setTimeout(async () => {
+            await takePhotoAsync();
             capturedPhotos[index] = capturedPhotos[capturedPhotos.length - 1];
             capturedPhotos.pop();
             
@@ -595,10 +695,86 @@ btnSave.addEventListener("click", () => {
     setTimeout(() => {
         rightSide.classList.remove("active");
         container.classList.remove("has-preview");
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
         capturedPhotos = [];
         if(stickerLayer) stickerLayer.innerHTML = '';
     }, 500);
 });
+
+// Save GIF (Live Photo Export)
+btnSaveVideo.addEventListener("click", () => {
+    btnSaveVideo.disabled = true;
+    btnSaveVideo.innerHTML = '<span><i class="fas fa-spinner fa-spin"></i> Merender GIF...</span>';
+    
+    // Pause animation to stop it interfering
+    let wasPaused = isAnimPaused;
+    isAnimPaused = true;
+    drawStickersToCanvas();
+
+    // Fetch the worker as a Blob to avoid CORS issues
+    fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js')
+        .then(response => response.text())
+        .then(workerText => {
+            const workerBlob = new Blob([workerText], { type: 'application/javascript' });
+            const workerUrl = URL.createObjectURL(workerBlob);
+            
+            // Create scaled down canvas for faster rendering and smaller file size
+            const scale = 0.5; // Half size
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = previewCanvas.width * scale;
+            tempCanvas.height = previewCanvas.height * scale;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            const gif = new GIF({
+                workers: 2,
+                quality: 10,
+                width: tempCanvas.width,
+                height: tempCanvas.height,
+                workerScript: workerUrl
+            });
+
+            // The array of captured photos has 10 frames each
+            for (let i = 0; i < 10; i++) {
+                // Draw the specific frame onto our main previewCanvas
+                createStoryGrid(capturedPhotos, i);
+                drawStickersToCanvas(); // Ensure stickers are drawn over it
+                
+                // Copy the result to our scaled-down tempCanvas
+                tempCtx.fillStyle = '#fff';
+                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                tempCtx.drawImage(previewCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+                
+                // Add frame to GIF
+                gif.addFrame(tempCtx, {copy: true, delay: 100}); // 100ms = 10fps
+            }
+            
+            gif.on('finished', function(blob) {
+                const gifUrl = URL.createObjectURL(blob);
+                let a = document.createElement("a");
+                a.href = gifUrl;
+                a.download = `E-Photobooth-Live-${Date.now()}.gif`;
+                a.click();
+                
+                alert("Live Photo berhasil disimpan sebagai GIF! 🎬");
+                
+                btnSaveVideo.disabled = false;
+                btnSaveVideo.innerHTML = '<span><i class="fas fa-film"></i> Save GIF (Live)</span>';
+                
+                // Restore animation state
+                isAnimPaused = wasPaused;
+            });
+            
+            gif.render();
+        })
+        .catch(err => {
+            alert("Gagal memuat sistem GIF.");
+            btnSaveVideo.disabled = false;
+            btnSaveVideo.innerHTML = '<span><i class="fas fa-film"></i> Save GIF (Live)</span>';
+            isAnimPaused = wasPaused;
+        });
+});
+
+
 
 // ================= STICKER LOGIC =================
 const customStickers = [

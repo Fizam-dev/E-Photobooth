@@ -13,6 +13,7 @@ var rightSide = document.getElementById("right-side");
 var container = document.querySelector(".container");
 
 var btnSaveVideo = document.getElementById("btn-save-video");
+var btnSaveGif = document.getElementById("btn-save-gif");
 var btnPauseAnim = document.getElementById("btn-pause-anim");
 
 
@@ -701,10 +702,59 @@ btnSave.addEventListener("click", () => {
     }, 500);
 });
 
-// Save GIF (Live Photo Export)
+// Save Video (MP4/WebM) for WhatsApp
 btnSaveVideo.addEventListener("click", () => {
     btnSaveVideo.disabled = true;
-    btnSaveVideo.innerHTML = '<span><i class="fas fa-spinner fa-spin"></i> Merender GIF...</span>';
+    btnSaveVideo.innerHTML = '<span><i class="fas fa-spinner fa-spin"></i> Recording...</span>';
+    
+    let wasPaused = isAnimPaused;
+    isAnimPaused = false; // ensure it plays while recording
+    drawStickersToCanvas();
+
+    // In Chrome, video/mp4 might not be fully supported by MediaRecorder directly without special codecs,
+    // but WhatsApp can usually accept webm if sent as a video, or we just try mp4.
+    let mimeType = 'video/webm';
+    if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+    }
+
+    const stream = previewCanvas.captureStream(30);
+    const mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+    const chunks = [];
+
+    mediaRecorder.ondataavailable = function(e) {
+        chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = function() {
+        const blob = new Blob(chunks, { type: mimeType });
+        const videoURL = URL.createObjectURL(blob);
+        
+        let a = document.createElement("a");
+        a.href = videoURL;
+        // determine extension
+        let ext = mimeType === 'video/mp4' ? 'mp4' : 'webm';
+        a.download = `E-Photobooth-Video-${Date.now()}.${ext}`;
+        a.click();
+
+        alert("Video berhasil disimpan! 🎬 (Kirim sebagai Video di WhatsApp untuk hasil terbaik)");
+        
+        btnSaveVideo.disabled = false;
+        btnSaveVideo.innerHTML = '<span><i class="fas fa-video"></i> Video (MP4/WebM)</span>';
+        isAnimPaused = wasPaused;
+    };
+
+    mediaRecorder.start();
+    // Record for exactly 2 seconds
+    setTimeout(() => {
+        mediaRecorder.stop();
+    }, 2000);
+});
+
+// Save GIF (Live Photo Export)
+btnSaveGif.addEventListener("click", () => {
+    btnSaveGif.disabled = true;
+    btnSaveGif.innerHTML = '<span><i class="fas fa-spinner fa-spin"></i> Merender GIF...</span>';
     
     // Pause animation to stop it interfering
     let wasPaused = isAnimPaused;
@@ -757,8 +807,8 @@ btnSaveVideo.addEventListener("click", () => {
                 
                 alert("Live Photo berhasil disimpan sebagai GIF! 🎬");
                 
-                btnSaveVideo.disabled = false;
-                btnSaveVideo.innerHTML = '<span><i class="fas fa-film"></i> Save GIF (Live)</span>';
+                btnSaveGif.disabled = false;
+                btnSaveGif.innerHTML = '<span><i class="fas fa-film"></i> GIF</span>';
                 
                 // Restore animation state
                 isAnimPaused = wasPaused;
@@ -768,8 +818,8 @@ btnSaveVideo.addEventListener("click", () => {
         })
         .catch(err => {
             alert("Gagal memuat sistem GIF.");
-            btnSaveVideo.disabled = false;
-            btnSaveVideo.innerHTML = '<span><i class="fas fa-film"></i> Save GIF (Live)</span>';
+            btnSaveGif.disabled = false;
+            btnSaveGif.innerHTML = '<span><i class="fas fa-film"></i> GIF</span>';
             isAnimPaused = wasPaused;
         });
 });
